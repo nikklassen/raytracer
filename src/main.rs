@@ -34,8 +34,8 @@ struct Window {
     handle: HWND,
 }
 
-const WIN_WIDTH: u32 = 800;
-const WIN_HEIGHT: u32 = 800;
+const WIN_WIDTH: u32 = 600;
+const WIN_HEIGHT: u32 = 600;
 
 fn create_window(name: &str, title: &str) -> Result<Window, Error> {
     let name = win32_string(name);
@@ -66,7 +66,7 @@ fn create_window(name: &str, title: &str) -> Result<Window, Error> {
             CW_USEDEFAULT,
             CW_USEDEFAULT,
             WIN_WIDTH as c_int,
-            WIN_HEIGHT as c_int,
+            (WIN_HEIGHT + 50) as c_int,
             null_mut(),
             null_mut(),
             hinstance,

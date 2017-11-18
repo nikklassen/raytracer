@@ -1,10 +1,29 @@
-use std::ops::Sub;
+use std::ops::{Sub, Add};
 
 #[derive(Debug, Clone, Copy)]
 pub struct RGB {
     pub r: u8,
     pub g: u8,
     pub b: u8,
+}
+
+impl RGB {
+    pub fn with_intensity(&self, k: f32) -> RGB {
+        let clamp = |c: f32| -> u8 {
+            if c > 255.0 {
+                0xff
+            } else if c < 0.0 {
+                0
+            } else {
+                c.round() as u8
+            }
+        };
+        RGB {
+            r: clamp((self.r as f32) * k),
+            g: clamp((self.g as f32) * k),
+            b: clamp((self.b as f32) * k),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -18,16 +37,31 @@ impl Point {
     pub fn new(x: f32, y: f32, z: f32) -> Self {
         Point { x: x, y: y, z: z }
     }
+
+    pub fn length(&self) -> f32 {
+        (self.x.powi(2) + self.y.powi(2) + self.z.powi(2)).sqrt()
+    }
+
+    pub fn mul(&self, k: f32) -> Point {
+        Point::new(self.x * k, self.y * k, self.z * k)
+    }
+
+    pub fn div(&self, k: f32) -> Point {
+        Point::new(self.x / k, self.y / k, self.z / k)
+    }
 }
 
 impl Sub for Point {
     type Output = Point;
     fn sub(self, other: Point) -> Point {
-        Point {
-            x: self.x - other.x,
-            y: self.y - other.y,
-            z: self.z - other.z,
-        }
+        Point::new(self.x - other.x, self.y - other.y, self.z - other.z)
+    }
+}
+
+impl Add for Point {
+    type Output = Point;
+    fn add(self, other: Point) -> Point {
+        Point::new(self.x + other.x, self.y + other.y, self.z + other.z)
     }
 }
 
