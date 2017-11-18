@@ -1,4 +1,4 @@
-use std::ops::{Sub, Add};
+use std::ops::{Add, Sub};
 
 #[derive(Debug, Clone, Copy)]
 pub struct RGB {
@@ -7,21 +7,33 @@ pub struct RGB {
     pub b: u8,
 }
 
+fn clamp_color(c: f32) -> u8 {
+    if c > 255.0 {
+        0xff
+    } else if c < 0.0 {
+        0
+    } else {
+        c.round() as u8
+    }
+}
+
 impl RGB {
     pub fn with_intensity(&self, k: f32) -> RGB {
-        let clamp = |c: f32| -> u8 {
-            if c > 255.0 {
-                0xff
-            } else if c < 0.0 {
-                0
-            } else {
-                c.round() as u8
-            }
-        };
         RGB {
-            r: clamp((self.r as f32) * k),
-            g: clamp((self.g as f32) * k),
-            b: clamp((self.b as f32) * k),
+            r: clamp_color((self.r as f32) * k),
+            g: clamp_color((self.g as f32) * k),
+            b: clamp_color((self.b as f32) * k),
+        }
+    }
+}
+
+impl Add for RGB {
+    type Output = RGB;
+    fn add(self, other: RGB) -> RGB {
+        RGB {
+            r: clamp_color((self.r as f32 + other.r as f32)),
+            g: clamp_color((self.g as f32 + other.g as f32)),
+            b: clamp_color((self.b as f32 + other.b as f32)),
         }
     }
 }
@@ -48,6 +60,10 @@ impl Point {
 
     pub fn div(&self, k: f32) -> Point {
         Point::new(self.x / k, self.y / k, self.z / k)
+    }
+
+    pub fn dot(&self, other: Point) -> f32 {
+        self.x * other.x + self.y * other.y + self.z * other.z
     }
 }
 
