@@ -1,5 +1,7 @@
 use std::f32;
 use canvas::{rgb, Canvas, Point, RGB};
+use rayon::prelude::*;
+
 
 const INF: f32 = f32::MAX;
 
@@ -12,6 +14,18 @@ struct Sphere {
     reflective: f32,
 }
 
+impl Sphere {
+    fn new(center: Point, radius: f32, color: RGB, specular: i32, reflective: f32) -> Self {
+        Sphere {
+            center,
+            radius,
+            color,
+            specular,
+            reflective,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 enum Light {
     Ambient { intensity: f32 },
@@ -19,53 +33,31 @@ enum Light {
     Directional { intensity: f32, direction: Point },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Scene {
     spheres: Vec<Sphere>,
     lights: Vec<Light>,
 }
 
-const BACKGROUND_COLOR: RGB = RGB {
-    r: 0,
-    g: 0,
-    b: 0,
-};
+const BACKGROUND_COLOR: RGB = RGB { r: 0, g: 0, b: 0 };
 
 pub fn draw(canvas: &mut Canvas, x_rot: f32, y_rot: f32) {
     let scene: Scene = Scene {
         spheres: vec![
             // Shiny red sphere
-            Sphere {
-                center: Point::new(0.0, -1.0, 3.0),
-                radius: 1.0,
-                color: rgb(255, 0, 0),
-                specular: 500,
-                reflective: 0.0,
-            },
+            Sphere::new(Point::new(0.0, -1.0, 3.0), 1.0, rgb(255, 0, 0), 500, 0.0),
             // Shiny blue sphere
-            Sphere {
-                center: Point::new(2.0, 0.0, 4.0),
-                radius: 1.0,
-                color: rgb(0, 0, 255),
-                specular: 500,
-                reflective: 0.0,
-            },
+            Sphere::new(Point::new(2.0, 0.0, 4.0), 1.0, rgb(0, 0, 255), 500, 0.0),
             // Matte green sphere
-            Sphere {
-                center: Point::new(-2.0, 0.0, 4.0),
-                radius: 1.0,
-                color: rgb(0, 255, 0),
-                specular: 10,
-                reflective: 0.0,
-            },
+            Sphere::new(Point::new(-2.0, 0.0, 4.0), 1.0, rgb(0, 255, 0), 10, 0.0),
             // Very shiny yellow sphere
-            Sphere {
-                center: Point::new(0.0, -5001.0, 0.0),
-                radius: 5000.0,
-                color: rgb(255, 255, 0),
-                specular: 1000,
-                reflective: 0.5,
-            },
+            Sphere::new(
+                Point::new(0.0, -5001.0, 0.0),
+                5000.0,
+                rgb(255, 255, 0),
+                1000,
+                0.5,
+            ),
         ],
         lights: vec![
             Light::Ambient { intensity: 0.2 },
@@ -82,12 +74,37 @@ pub fn draw(canvas: &mut Canvas, x_rot: f32, y_rot: f32) {
 
     let origin = Point::new(0.0, 0.0, 0.0);
     let camera_rotation = make_rotation(x_rot / 10.0, y_rot / 10.0, 0.0);
-    for x in (-canvas.width / 2)..(canvas.width / 2) {
-        for y in (-canvas.height / 2)..(canvas.height / 2) {
-            let p = canvas.to_viewport(x as f32, y as f32);
-            let d = point_mul(&camera_rotation, p);
-            let color = trace_ray(&scene, origin, d, canvas.depth as f32, INF, 3);
-            canvas.put_pixel(x, y, color);
+    let segments = vec![
+        [-canvas.width / 2, 0, -canvas.height / 2, 0],
+        [-canvas.width / 2, 0, 0, canvas.height / 2],
+        [0, canvas.width / 2, -canvas.height / 2, 0],
+        [0, canvas.width / 2, 0, canvas.height / 2],
+    ];
+
+    let chunk_size = (canvas.width * canvas.height / 4) as usize;
+    {
+        let color_results = segments
+            .par_iter()
+            .map(|segment| {
+                let mut result = vec![(0, 0, RGB { r: 0, g: 0, b: 0 }); chunk_size];
+                let mut offset = 0;
+
+                for x in segment[0]..segment[1] {
+                    for y in segment[2]..segment[3] {
+                        let p = canvas.to_viewport(x as f32, y as f32);
+                        let d = point_mul(&camera_rotation, p);
+                        let color = trace_ray(&scene, origin, d, canvas.depth as f32, INF, 3);
+                        result[offset] = (x, y, color);
+                        offset += 1;
+                    }
+                }
+                result
+            })
+            .collect::<Vec<_>>();
+        for chunk in color_results {
+            for (x, y, color) in chunk {
+                canvas.put_pixel(x, y, color);
+            }
         }
     }
 }
@@ -99,14 +116,14 @@ fn make_rotation(theta_x: f32, theta_y: f32, theta_z: f32) -> Vec<Vec<f32>> {
         vec![0.0, theta_x.sin(), theta_x.cos()],
     ];
     let ry = vec![
-        vec![ theta_y.cos(), 0.0, theta_y.sin()],
-        vec![           0.0, 1.0,           0.0],
+        vec![theta_y.cos(), 0.0, theta_y.sin()],
+        vec![0.0, 1.0, 0.0],
         vec![-theta_y.sin(), 0.0, theta_y.cos()],
     ];
     let rz = vec![
         vec![theta_z.cos(), -theta_z.sin(), 0.0],
-        vec![theta_z.sin(),  theta_z.cos(), 0.0],
-        vec![          0.0,            0.0, 1.0],
+        vec![theta_z.sin(), theta_z.cos(), 0.0],
+        vec![0.0, 0.0, 1.0],
     ];
     let m = matrix_mul2(&ry, &rx);
     matrix_mul2(&rz, &m)
@@ -157,6 +174,17 @@ fn closest_intersection(
     (closest_sphere, closest_t)
 }
 
+fn has_shadow(scene: &Scene, origin: Point, d: Point, t_min: f32, t_max: f32) -> bool {
+    // similar to find closest intersection, except we just find if there is an intersection
+    for sphere in scene.spheres.iter() {
+        let (t1, t2) = intersect_ray_sphere(origin, d, sphere);
+        if t1 >= t_min && t1 <= t_max && t1 < INF || t2 >= t_min && t2 <= t_max && t2 < INF {
+            return true;
+        }
+    }
+    false
+}
+
 fn trace_ray(scene: &Scene, origin: Point, d: Point, t_min: f32, t_max: f32, depth: u32) -> RGB {
     let (closest_sphere, closest_t) = closest_intersection(scene, origin, d, t_min, t_max);
     if closest_sphere.is_none() {
@@ -168,7 +196,9 @@ fn trace_ray(scene: &Scene, origin: Point, d: Point, t_min: f32, t_max: f32, dep
     let p = origin + d.mul(closest_t);
     let mut n = p - sphere.center;
     n = n.div(n.length());
-    let local_color = sphere.color.with_intensity(compute_lighting(scene, p, n, d.mul(-1.0), sphere.specular));
+    let local_color = sphere
+        .color
+        .with_intensity(compute_lighting(scene, p, n, d.mul(-1.0), sphere.specular));
 
     // If we hit the recursion limit or the object is not relective, we're done
     let r = sphere.reflective;
@@ -225,8 +255,7 @@ fn compute_lighting(scene: &Scene, p: Point, n: Point, v: Point, s: i32) -> f32 
         };
 
         // Shadow check
-        let (shadow_sphere, _) = closest_intersection(scene, p, v_light, 0.001, t_max);
-        if !shadow_sphere.is_none() {
+        if has_shadow(scene, p, v_light, 0.001, t_max) {
             return total_intensity;
         }
 

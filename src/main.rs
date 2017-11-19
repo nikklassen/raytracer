@@ -3,6 +3,7 @@ extern crate gdi32;
 extern crate kernel32;
 extern crate user32;
 extern crate winapi;
+extern crate rayon;
 
 mod tracer;
 mod canvas;
