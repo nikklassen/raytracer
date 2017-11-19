@@ -65,6 +65,14 @@ impl Point {
     pub fn dot(&self, other: Point) -> f32 {
         self.x * other.x + self.y * other.y + self.z * other.z
     }
+
+    pub fn cross(&self, other: Point) -> Point {
+        Point {
+            x: self.y * other.z - self.z * other.y,
+            y: self.z * other.x - self.x * other.z,
+            z: self.x * other.y - self.y * other.x,
+        }
+    }
 }
 
 impl Sub for Point {
