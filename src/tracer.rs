@@ -32,7 +32,6 @@ const BACKGROUND_COLOR: RGB = RGB {
 };
 
 pub fn draw(canvas: &mut Canvas) {
-    let origin = Point::new(0.0, 0.0, 0.0);
     let scene: Scene = Scene {
         spheres: vec![
             // Shiny red sphere
@@ -41,7 +40,7 @@ pub fn draw(canvas: &mut Canvas) {
                 radius: 1.0,
                 color: rgb(255, 0, 0),
                 specular: 500,
-                reflective: 0.2,
+                reflective: 0.0,
             },
             // Shiny blue sphere
             Sphere {
@@ -49,7 +48,7 @@ pub fn draw(canvas: &mut Canvas) {
                 radius: 1.0,
                 color: rgb(0, 0, 255),
                 specular: 500,
-                reflective: 0.3,
+                reflective: 0.0,
             },
             // Matte green sphere
             Sphere {
@@ -57,7 +56,7 @@ pub fn draw(canvas: &mut Canvas) {
                 radius: 1.0,
                 color: rgb(0, 255, 0),
                 specular: 10,
-                reflective: 0.4,
+                reflective: 0.0,
             },
             // Very shiny yellow sphere
             Sphere {
@@ -80,12 +79,57 @@ pub fn draw(canvas: &mut Canvas) {
             },
         ],
     };
+    let origin = Point::new(3.0, 0.0, 1.0);
+    let camera_rotation = make_rotation(0.1, -f32::consts::PI / 4.0, 0.0);
     for x in (-canvas.width / 2)..(canvas.width / 2) {
         for y in (-canvas.height / 2)..(canvas.height / 2) {
-            let d = canvas.to_viewport(x as f32, y as f32);
+            let p = canvas.to_viewport(x as f32, y as f32);
+            let d = point_mul(&camera_rotation, p);
             let color = trace_ray(&scene, origin, d, canvas.depth as f32, INF, 3);
             canvas.put_pixel(x, y, color);
         }
+    }
+}
+
+fn make_rotation(theta_x: f32, theta_y: f32, theta_z: f32) -> Vec<Vec<f32>> {
+    let rx = vec![
+        vec![1.0, 0.0, 0.0],
+        vec![0.0, theta_x.cos(), -theta_x.sin()],
+        vec![0.0, theta_x.sin(), theta_x.cos()],
+    ];
+    let ry = vec![
+        vec![ theta_y.cos(), 0.0, theta_y.sin()],
+        vec![           0.0, 1.0,           0.0],
+        vec![-theta_y.sin(), 0.0, theta_y.cos()],
+    ];
+    let rz = vec![
+        vec![theta_z.cos(), -theta_z.sin(), 0.0],
+        vec![theta_z.sin(),  theta_z.cos(), 0.0],
+        vec![          0.0,            0.0, 1.0],
+    ];
+    let m = matrix_mul2(&ry, &rx);
+    matrix_mul2(&rz, &m)
+}
+
+fn matrix_mul2(m1: &Vec<Vec<f32>>, m2: &Vec<Vec<f32>>) -> Vec<Vec<f32>> {
+    let n = m1.len();
+    let m = m2[0].len();
+    let mut result: Vec<Vec<f32>> = vec![vec![0.0; m]; n];
+    for row in 0..n {
+        for col in 0..m {
+            for i in 0..n {
+                result[row][col] += m1[row][i] * m2[i][col];
+            }
+        }
+    }
+    result
+}
+
+fn point_mul(m1: &Vec<Vec<f32>>, p: Point) -> Point {
+    Point {
+        x: m1[0][0] * p.x + m1[0][1] * p.y + m1[0][2] * p.z,
+        y: m1[1][0] * p.x + m1[1][1] * p.y + m1[1][2] * p.z,
+        z: m1[2][0] * p.x + m1[2][1] * p.y + m1[2][2] * p.z,
     }
 }
 
