@@ -7,11 +7,12 @@ extern crate winapi;
 mod tracer;
 mod canvas;
 
+use std::sync::atomic::{AtomicIsize, ATOMIC_ISIZE_INIT, Ordering};
 use std::ffi::OsStr;
 use std::os::windows::ffi::OsStrExt;
 use std::iter::once;
 use std::mem;
-use std::ptr::null_mut;
+use std::ptr::{null_mut, null};
 use std::io::Error;
 
 use gdi32::StretchDIBits;
@@ -19,9 +20,9 @@ use winapi::{c_int, c_void, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS
              PAINTSTRUCT, SRCCOPY};
 use winapi::minwindef::{LPARAM, LRESULT, UINT, WPARAM};
 use winapi::winuser::{CS_HREDRAW, CS_OWNDC, CS_VREDRAW, CW_USEDEFAULT, MSG, WM_PAINT, WNDCLASSW,
-                      WS_OVERLAPPEDWINDOW, WS_VISIBLE};
+                      WS_OVERLAPPEDWINDOW, WS_VISIBLE, VK_LEFT, VK_RIGHT, VK_UP, VK_DOWN, WM_KEYUP};
 use user32::{BeginPaint, CreateWindowExW, DefWindowProcW, DispatchMessageW, EndPaint, GetMessageW,
-             RegisterClassW, TranslateMessage};
+             RegisterClassW, TranslateMessage, InvalidateRect};
 use kernel32::GetModuleHandleW;
 
 use canvas::Canvas;
@@ -81,6 +82,9 @@ fn create_window(name: &str, title: &str) -> Result<Window, Error> {
     }
 }
 
+static X_ROTATION: AtomicIsize = ATOMIC_ISIZE_INIT;
+static Y_ROTATION: AtomicIsize = ATOMIC_ISIZE_INIT;
+
 unsafe extern "system" fn message_handler(
     hwnd: HWND,
     u_msg: UINT,
@@ -89,7 +93,7 @@ unsafe extern "system" fn message_handler(
 ) -> LRESULT {
     if u_msg == WM_PAINT {
         let mut canvas = Canvas::new(WIN_WIDTH as i32, WIN_HEIGHT as i32);
-        tracer::draw(&mut canvas);
+        tracer::draw(&mut canvas, X_ROTATION.load(Ordering::SeqCst) as f32, Y_ROTATION.load(Ordering::SeqCst) as f32);
 
         let mut info: BITMAPINFO = mem::uninitialized();
         info.bmiHeader.biBitCount = 24;
@@ -128,8 +132,21 @@ fn handle_message(window: &mut Window) -> bool {
     unsafe {
         let mut message: MSG = mem::uninitialized();
         if GetMessageW(&mut message as *mut MSG, window.handle, 0, 0) > 0 {
-            TranslateMessage(&message as *const MSG);
-            DispatchMessageW(&message as *const MSG);
+            if message.message == WM_KEYUP {
+                if message.wParam == (VK_LEFT as u64) {
+                    Y_ROTATION.fetch_sub(1, Ordering::SeqCst);
+                } else if message.wParam == (VK_RIGHT as u64) {
+                    Y_ROTATION.fetch_add(1, Ordering::SeqCst);
+                } else if message.wParam == (VK_UP as u64) {
+                    X_ROTATION.fetch_sub(1, Ordering::SeqCst);
+                } else if message.wParam == (VK_DOWN as u64) {
+                    X_ROTATION.fetch_add(1, Ordering::SeqCst);
+                }
+                InvalidateRect(message.hwnd, null(), 1);
+            } else {
+                TranslateMessage(&message as *const MSG);
+                DispatchMessageW(&message as *const MSG);
+            }
             true
         } else {
             false

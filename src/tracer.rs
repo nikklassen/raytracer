@@ -31,7 +31,7 @@ const BACKGROUND_COLOR: RGB = RGB {
     b: 0,
 };
 
-pub fn draw(canvas: &mut Canvas) {
+pub fn draw(canvas: &mut Canvas, x_rot: f32, y_rot: f32) {
     let scene: Scene = Scene {
         spheres: vec![
             // Shiny red sphere
@@ -79,8 +79,9 @@ pub fn draw(canvas: &mut Canvas) {
             },
         ],
     };
-    let origin = Point::new(3.0, 0.0, 1.0);
-    let camera_rotation = make_rotation(0.1, -f32::consts::PI / 4.0, 0.0);
+
+    let origin = Point::new(0.0, 0.0, 0.0);
+    let camera_rotation = make_rotation(x_rot / 10.0, y_rot / 10.0, 0.0);
     for x in (-canvas.width / 2)..(canvas.width / 2) {
         for y in (-canvas.height / 2)..(canvas.height / 2) {
             let p = canvas.to_viewport(x as f32, y as f32);
